@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
+import 'package:fluttertoast/fluttertoast.dart';
 
 Future main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +16,7 @@ Future main() async {
 
 class MyApp extends StatelessWidget {
   bool isObscurePassword = true;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -36,21 +41,65 @@ class EditProfileUIState extends State<EditProfileUI> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final locationController = TextEditingController();
+  String imageurl = " ";
 
   Future _createUser() async {
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final user = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
 
-      await FirebaseFirestore.instance.collection('users').add({
+      final docuser = FirebaseFirestore.instance
+          .collection('users')
+          .doc(emailController.text);
+      final json = {
         'name': nameController.text.trim(),
         'email': emailController.text.trim(),
         'password': passwordController.text.trim(),
         'location': locationController.text.trim(),
-      });
+      };
+      await docuser.set(json);
+
+      Fluttertoast.showToast(
+          msg: "Profile Updated",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.CENTER,
+          timeInSecForIosWeb: 2,
+          backgroundColor: Color.fromARGB(255, 114, 192, 255),
+          textColor: Colors.black,
+          fontSize: 15);
     } on FirebaseAuthException catch (e) {
+      Fluttertoast.showToast(
+          msg: e.code,
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.CENTER,
+          timeInSecForIosWeb: 2,
+          backgroundColor: Colors.blue,
+          textColor: Colors.red,
+          fontSize: 15);
+    }
+  }
+
+  void pickUploadImage() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 75,
+      );
+
+      Reference ref = FirebaseStorage.instance.ref().child("profilepic.jpg");
+
+      await ref.putFile(File(image!.path));
+      ref.getDownloadURL().then((value) async {
+        print(value);
+        setState(() {
+          imageurl = value;
+        });
+      });
+    } catch (e) {
       print(e);
     }
   }
@@ -92,31 +141,36 @@ class EditProfileUIState extends State<EditProfileUI> {
                       height: 130,
                       decoration: BoxDecoration(
                           border: Border.all(width: 4, color: Colors.white),
+                          shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
                                 spreadRadius: 2,
                                 blurRadius: 10,
-                                color: Colors.black.withOpacity(0.1))
+                                color: Colors.black.withOpacity(0.1)),
                           ],
-                          shape: BoxShape.circle,
                           image: DecorationImage(
                               fit: BoxFit.cover,
-                              image: NetworkImage(
-                                  'https://cdn.pixabay.com/photo/2015/11/26/00/14/woman-1063100_1280.jpg'))),
+                              image: NetworkImage(imageurl))),
                     ),
                     Positioned(
                         bottom: 0,
                         right: 0,
-                        child: Container(
-                          height: 40,
-                          width: 40,
-                          decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(width: 4, color: Colors.white),
-                              color: Colors.blue),
-                          child: Icon(
-                            Icons.edit,
-                            color: Colors.white,
+                        child: GestureDetector(
+                          onTap: () {
+                            pickUploadImage();
+                          },
+                          child: Container(
+                            height: 40,
+                            width: 40,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(width: 4, color: Colors.white),
+                                color: Colors.blue),
+                            child: Icon(
+                              Icons.edit,
+                              color: Colors.white,
+                            ),
                           ),
                         ))
                   ],
@@ -134,8 +188,34 @@ class EditProfileUIState extends State<EditProfileUI> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton(
-                    onPressed: () {},
-                    child: Text("CANCEL",
+                    onPressed: () async {
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(FirebaseAuth.instance.currentUser!.email)
+                            .delete();
+                        await FirebaseAuth.instance.currentUser!.delete();
+
+                        Fluttertoast.showToast(
+                            msg: "Account Deleted",
+                            toastLength: Toast.LENGTH_SHORT,
+                            gravity: ToastGravity.CENTER,
+                            timeInSecForIosWeb: 2,
+                            backgroundColor: Colors.grey,
+                            textColor: Colors.black,
+                            fontSize: 15);
+                      } on FirebaseAuthException catch (e) {
+                        Fluttertoast.showToast(
+                            msg: e.code,
+                            toastLength: Toast.LENGTH_SHORT,
+                            gravity: ToastGravity.CENTER,
+                            timeInSecForIosWeb: 2,
+                            backgroundColor: Colors.blue,
+                            textColor: Colors.red,
+                            fontSize: 15);
+                      }
+                    },
+                    child: Text("DELETE ACC",
                         style: TextStyle(
                             fontSize: 15,
                             letterSpacing: 2,
